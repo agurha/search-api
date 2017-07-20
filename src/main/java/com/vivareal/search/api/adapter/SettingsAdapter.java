@@ -6,7 +6,9 @@ public interface SettingsAdapter<T, U> {
 
     T settings();
 
-    U settingsByKey(String index, String key);
+    U settingsByKey(String index, String property);
 
     void checkIndex(Indexable request);
+
+    String getFieldType(String index, String fieldName);
 }

@@ -1,20 +1,20 @@
 package com.vivareal.search.api.exception;
 
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 /**
  * Created by leandropereirapinto on 7/12/17.
  */
 public class PropertyNotFoundException extends IllegalArgumentException {
 
-    private static final Function<String, String> ERROR_MESSAGE = property -> String.format("Property %s not found", property);
+    private static final BiFunction<String, String, String> ERROR_MESSAGE = (property, index) -> String.format("Property %s not found for index %s", property, index);
 
-    public PropertyNotFoundException(final String property) {
-        super(ERROR_MESSAGE.apply(property));
+    public PropertyNotFoundException(final String property, final String index) {
+        super(ERROR_MESSAGE.apply(property, index));
     }
 
-    public PropertyNotFoundException(String property, Throwable cause) {
-        super(ERROR_MESSAGE.apply(property), cause);
+    public PropertyNotFoundException(String property, final String index, Throwable cause) {
+        super(ERROR_MESSAGE.apply(property, index), cause);
     }
 
     public PropertyNotFoundException(Throwable cause) {

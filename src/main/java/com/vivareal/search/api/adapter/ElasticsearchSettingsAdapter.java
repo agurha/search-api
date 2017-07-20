@@ -1,11 +1,14 @@
 package com.vivareal.search.api.adapter;
 
-import com.google.common.collect.Lists;
+import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.vivareal.search.api.exception.IndexNotFoundException;
+import com.vivareal.search.api.exception.InvalidFieldException;
+import com.vivareal.search.api.exception.PropertyNotFoundException;
 import com.vivareal.search.api.model.search.Indexable;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.client.transport.TransportClient;
-import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.cluster.metadata.MappingMetaData;
+import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,11 +16,14 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.function.Predicate;
 
+import static com.google.common.collect.Lists.newArrayList;
+import static com.google.common.collect.Maps.newHashMap;
+import static com.vivareal.search.api.utils.FlattenMapUtils.flat;
+import static java.lang.String.valueOf;
 import static java.util.Arrays.stream;
 import static org.apache.commons.lang3.StringUtils.startsWith;
 import static org.springframework.beans.factory.config.BeanDefinition.SCOPE_SINGLETON;
@@ -33,7 +39,6 @@ public class ElasticsearchSettingsAdapter implements SettingsAdapter<Map<String,
     private TransportClient transportClient;
 
     private Map<String, Map<String, Object>> structuredIndices = new HashMap<>();
-    private Map<String, Map<String, String>> mapIndices = new HashMap<>();
 
     public static final String SHARDS = "index.number_of_shards";
     public static final String REPLICAS = "index.number_of_replicas";
@@ -46,45 +51,67 @@ public class ElasticsearchSettingsAdapter implements SettingsAdapter<Map<String,
     }
 
     @Override
-    public String settingsByKey(final String index, final String key) {
-        if (isEmpty(mapIndices))
+    public String settingsByKey(final String index, final String property) {
+        if (isEmpty(structuredIndices))
             getSettingsInformationFromCluster();
 
-        if (!mapIndices.containsKey(index))
-            throw new IndexNotFoundException(index);
+        if (!structuredIndices.get(index).containsKey(property))
+            throw new PropertyNotFoundException(property, index);
 
-        return mapIndices.get(index).get(key);
+        return valueOf(structuredIndices.get(index).get(property));
     }
 
     @Override
     public void checkIndex(final Indexable request) {
-        if (isEmpty(mapIndices))
+        if (isEmpty(structuredIndices))
             getSettingsInformationFromCluster();
 
-        if (!mapIndices.containsKey(request.getIndex()))
+        if (!structuredIndices.containsKey(request.getIndex()))
             throw new IndexNotFoundException(request.getIndex());
+    }
+
+    @Override
+    public String getFieldType(final String index, final String fieldName) {
+        if (isEmpty(structuredIndices))
+            getSettingsInformationFromCluster();
+
+        if (!structuredIndices.get(index).containsKey(fieldName))
+            throw new InvalidFieldException(fieldName, index);
+
+        return valueOf(structuredIndices.get(index).get(fieldName));
     }
 
     @Scheduled(cron = "${es.settings.refresh.cron}")
     private void getSettingsInformationFromCluster() {
         GetIndexResponse getIndexResponse = this.transportClient.admin().indices().prepareGetIndex().get();
-
-        Predicate<String> acceptSettings = new Predicate<String>() {
-            List<String> validSettings = Lists.newArrayList(SHARDS, REPLICAS);
-
-            @Override
-            public boolean test(String s) {
-                return validSettings.contains(s);
-            }
-        };
+        Map<String, Map<String, Object>> structuredIndicesAux = new HashMap<>();
 
         stream(this.transportClient.admin().indices().prepareGetIndex().get().getIndices()).filter(a -> !startsWith(a, ".")).forEach(
             index -> {
-                Settings settings = getIndexResponse.getSettings().get(index).filter(acceptSettings);
-                structuredIndices.put(index, settings.getAsStructuredMap());
-                mapIndices.put(index, settings.getAsMap());
+                Map<String, Object> indexInfo = newHashMap();
+                indexInfo.putAll(getIndexResponse.getSettings().get(index).filter(newArrayList(SHARDS, REPLICAS)::contains).getAsMap());
+
+                ImmutableOpenMap<String, MappingMetaData> immutableIndexMapping = getIndexResponse.getMappings().get(index);
+                immutableIndexMapping.keys().iterator().forEachRemaining(obj -> getMappingFromType(obj, indexInfo, immutableIndexMapping, index));
+
+                structuredIndicesAux.put(index, indexInfo);
             }
         );
+
+        if (!structuredIndicesAux.isEmpty()) {
+            structuredIndices.clear();
+            structuredIndices.putAll(structuredIndicesAux);
+        }
+
         LOG.debug("Refresh Elasticsearch settings executed with success");
+    }
+
+    private void getMappingFromType(ObjectCursor<String> stringObjectCursor, Map<String, Object> indexInfo, ImmutableOpenMap<String, MappingMetaData> immutableIndexMapping, String index) {
+        String type = stringObjectCursor.value;
+        try {
+            indexInfo.putAll(flat(immutableIndexMapping.get(type).getSourceAsMap(), newArrayList("mappings", "properties", "type", "fields", index, type)));
+        } catch (IOException e) {
+            LOG.error("Error on get mapping from index {} and type {}", index, type, e);
+        }
     }
 }

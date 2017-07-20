@@ -75,8 +75,7 @@ public class SearchApiEnv {
 
             if (entity != null) {
                 String retSrc = EntityUtils.toString(entity);
-                HashMap<String, Object> response = mapper.readValue(retSrc, new TypeReference<HashMap<String, Object>>() {
-                });
+                HashMap<String, Object> response = mapper.readValue(retSrc, new TypeReference<HashMap<String, Object>>() {});
                 if (!isEmpty(response) && response.containsKey("hits")) {
 
                     @SuppressWarnings("unchecked")
