@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
+import static com.google.common.collect.Maps.newHashMap;
 import static com.vivareal.search.api.adapter.ElasticsearchSettingsAdapter.SHARDS;
 import static com.vivareal.search.api.configuration.environment.RemoteProperties.*;
 import static com.vivareal.search.api.model.query.LogicalOperator.AND;
@@ -43,6 +44,7 @@ import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.joining;
 import static org.apache.commons.lang3.ArrayUtils.contains;
 import static org.apache.commons.lang3.StringUtils.isEmpty;
+import static org.apache.lucene.search.join.ScoreMode.None;
 import static org.elasticsearch.index.query.Operator.OR;
 import static org.elasticsearch.index.query.QueryBuilders.*;
 import static org.springframework.beans.factory.config.BeanDefinition.SCOPE_SINGLETON;
@@ -92,15 +94,17 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
             applyFacetFields(searchBuilder, request);
 
             applyQueryString(queryBuilder, request);
-            applyFilterQuery(queryBuilder, request);
+
+            Map<String, BoolQueryBuilder> nestedQueries = newHashMap();
+            applyFilterQuery(queryBuilder, request, nestedQueries);
         });
     }
 
-    private void applyFilterQuery(BoolQueryBuilder queryBuilder, final Filterable filter) {
-        ofNullable(filter.getFilter()).ifPresent(f -> applyFilterQuery(queryBuilder, QueryParser.get().parse(f), filter.getIndex()));
+    private void applyFilterQuery(BoolQueryBuilder queryBuilder, final Filterable filter, Map<String, BoolQueryBuilder> nestedQueries) {
+        ofNullable(filter.getFilter()).ifPresent(f -> applyFilterQuery(queryBuilder, QueryParser.get().parse(f), filter.getIndex(), nestedQueries));
     }
 
-    private void applyFilterQuery(BoolQueryBuilder queryBuilder, final QueryFragment queryFragment, final String indexName) {
+    private void applyFilterQuery(BoolQueryBuilder queryBuilder, final QueryFragment queryFragment, final String indexName, Map<String, BoolQueryBuilder> nestedQueries) {
         if (queryFragment != null && queryFragment instanceof QueryFragmentList) {
             QueryFragmentList queryFragmentList = (QueryFragmentList) queryFragment;
             LogicalOperator logicalOperator = AND;
@@ -110,15 +114,16 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
 
                 if (queryFragmentFilter instanceof QueryFragmentList) {
                     BoolQueryBuilder recursiveQueryBuilder = boolQuery();
-                    addFilterQueryByLogicalOperator(queryBuilder, recursiveQueryBuilder, getLogicalOperatorByQueryFragmentList(queryFragmentList, index, logicalOperator), isNotBeforeCurrentQueryFragment(queryFragmentList, index));
-                    applyFilterQuery(recursiveQueryBuilder, queryFragmentFilter, indexName);
+                    addFilterQueryByLogicalOperator(queryBuilder, recursiveQueryBuilder, getLogicalOperatorByQueryFragmentList(queryFragmentList, index, logicalOperator), isNotBeforeCurrentQueryFragment(queryFragmentList, index), false, null, nestedQueries);
+                    applyFilterQuery(recursiveQueryBuilder, queryFragmentFilter, indexName, newHashMap());
 
                 } else if (queryFragmentFilter instanceof QueryFragmentItem) {
                     QueryFragmentItem queryFragmentItem = (QueryFragmentItem) queryFragmentFilter;
                     Filter filter = queryFragmentItem.getFilter();
 
                     String fieldName = filter.getField().getName();
-                    String fieldType = settingsAdapter.getFieldType(indexName, fieldName);
+                    settingsAdapter.checkFieldName(indexName, fieldName);
+                    boolean nested = ("nested".equals(settingsAdapter.getFieldType(indexName, fieldName.contains(".") ? fieldName.split("\\.")[0] : fieldName)));
 
                     final boolean not = isNotBeforeCurrentQueryFragment(queryFragmentList, index);
                     logicalOperator = getLogicalOperatorByQueryFragmentList(queryFragmentList, index, logicalOperator);
@@ -131,31 +136,31 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
 
                         switch (operator) {
                             case DIFFERENT:
-                                addFilterQueryByLogicalOperator(queryBuilder, matchQuery(fieldName, singleValue), logicalOperator, !not);
+                                addFilterQueryByLogicalOperator(queryBuilder, matchQuery(fieldName, singleValue), logicalOperator, !not, nested, fieldName, nestedQueries);
                                 break;
                             case EQUAL:
-                                addFilterQueryByLogicalOperator(queryBuilder, matchQuery(fieldName, singleValue), logicalOperator, not);
+                                addFilterQueryByLogicalOperator(queryBuilder, matchQuery(fieldName, singleValue), logicalOperator, not, nested, fieldName, nestedQueries);
                                 break;
                             case GREATER:
-                                addFilterQueryByLogicalOperator(queryBuilder, rangeQuery(fieldName).from(singleValue).includeLower(false), logicalOperator, not);
+                                addFilterQueryByLogicalOperator(queryBuilder, rangeQuery(fieldName).from(singleValue).includeLower(false), logicalOperator, not, nested, fieldName, nestedQueries);
                                 break;
                             case GREATER_EQUAL:
-                                addFilterQueryByLogicalOperator(queryBuilder, rangeQuery(fieldName).from(singleValue).includeLower(true), logicalOperator, not);
+                                addFilterQueryByLogicalOperator(queryBuilder, rangeQuery(fieldName).from(singleValue).includeLower(true), logicalOperator, not, nested, fieldName, nestedQueries);
                                 break;
                             case LESS:
-                                addFilterQueryByLogicalOperator(queryBuilder, rangeQuery(fieldName).to(singleValue).includeUpper(false), logicalOperator, not);
+                                addFilterQueryByLogicalOperator(queryBuilder, rangeQuery(fieldName).to(singleValue).includeUpper(false), logicalOperator, not, nested, fieldName, nestedQueries);
                                 break;
                             case LESS_EQUAL:
-                                addFilterQueryByLogicalOperator(queryBuilder, rangeQuery(fieldName).to(singleValue).includeUpper(true), logicalOperator, not);
+                                addFilterQueryByLogicalOperator(queryBuilder, rangeQuery(fieldName).to(singleValue).includeUpper(true), logicalOperator, not, nested, fieldName, nestedQueries);
                                 break;
                             case IN:
                                 Object[] values = multiValues.stream().map(contents -> ((com.vivareal.search.api.model.query.Value) contents).getContents(0)).toArray();
-                                addFilterQueryByLogicalOperator(queryBuilder, termsQuery(fieldName, values), logicalOperator, not);
+                                addFilterQueryByLogicalOperator(queryBuilder, termsQuery(fieldName, values), logicalOperator, not, nested, fieldName, nestedQueries);
                                 break;
                             case VIEWPORT:
                                 GeoPoint topRight = createGeoPointFromRawCoordinates((List) multiValues.get(0));
                                 GeoPoint bottomLeft = createGeoPointFromRawCoordinates((List) multiValues.get(1));
-                                addFilterQueryByLogicalOperator(queryBuilder, geoBoundingBoxQuery(filter.getField().getName()).setCornersOGC(bottomLeft, topRight), logicalOperator, not);
+                                addFilterQueryByLogicalOperator(queryBuilder, geoBoundingBoxQuery(filter.getField().getName()).setCornersOGC(bottomLeft, topRight), logicalOperator, not, nested, fieldName, nestedQueries);
                                 break;
                             default:
                                 throw new UnsupportedOperationException("Unknown Relational Operator " + operator.name());
@@ -163,11 +168,61 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
                     } else {
                         RangeQueryBuilder lte = rangeQuery(fieldName).to(0).includeUpper(true);
                         RangeQueryBuilder gte = rangeQuery(fieldName).from(0).includeLower(true);
-                        addFilterQueryByLogicalOperator(queryBuilder, boolQuery().should(lte).should(gte), logicalOperator, DIFFERENT.equals(operator) == not);
+                        addFilterQueryByLogicalOperator(queryBuilder, boolQuery().should(lte).should(gte), logicalOperator, DIFFERENT.equals(operator) == not, nested, fieldName, nestedQueries);
                     }
                 }
             }
         }
+    }
+
+    private void addFilterQueryByLogicalOperator(BoolQueryBuilder boolQueryBuilder, final QueryBuilder queryBuilder, final LogicalOperator logicalOperator, final boolean not, final boolean nested, final String fieldName, Map<String, BoolQueryBuilder> nestedQueries) {
+
+        QueryBuilder query = (nested ? buildNestedQuery(fieldName, queryBuilder, logicalOperator, not, nestedQueries) : queryBuilder);
+
+        if (query == null)
+            return;
+
+        if(logicalOperator.equals(AND)) {
+            if (!not)
+                boolQueryBuilder.must(query);
+            else
+                boolQueryBuilder.mustNot(query);
+        } else if(logicalOperator.equals(LogicalOperator.OR)) {
+            if (!not)
+                boolQueryBuilder.should(query);
+            else
+                boolQueryBuilder.should(boolQuery().mustNot(query));
+        }
+    }
+
+    private QueryBuilder buildNestedQuery(final String fieldName, final QueryBuilder query, final LogicalOperator logicalOperator, final boolean not, Map<String, BoolQueryBuilder> nestedQueries) {
+
+        String parentFieldName = fieldName.split("\\.")[0];
+
+        BoolQueryBuilder boolQueryBuilder;
+        boolean found = false;
+
+        if (nestedQueries.containsKey(parentFieldName)) {
+            boolQueryBuilder = nestedQueries.get(parentFieldName);
+            found = true;
+        } else {
+            boolQueryBuilder = boolQuery();
+            nestedQueries.put(parentFieldName, boolQueryBuilder);
+        }
+
+        if(logicalOperator.equals(AND)) {
+            if (!not)
+                boolQueryBuilder.must(query);
+            else
+                boolQueryBuilder.mustNot(query);
+        } else if(logicalOperator.equals(LogicalOperator.OR)) {
+            if (!not)
+                boolQueryBuilder.should(query);
+            else
+                boolQueryBuilder.should(boolQuery().mustNot(query));
+        }
+
+        return found ? null : nestedQuery(parentFieldName, boolQueryBuilder, None);
     }
 
     private GeoPoint createGeoPointFromRawCoordinates(List<com.vivareal.search.api.model.query.Value> viewPortLatLon) {
@@ -195,20 +250,6 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
                 return ((QueryFragmentOperator) next).getOperator();
         }
         return logicalOperator;
-    }
-
-    private void addFilterQueryByLogicalOperator(BoolQueryBuilder queryBuilder, final QueryBuilder query, final LogicalOperator logicalOperator, final boolean not) {
-        if(logicalOperator.equals(AND)) {
-            if (!not)
-                queryBuilder.must(query);
-            else
-                queryBuilder.mustNot(query);
-        } else if(logicalOperator.equals(LogicalOperator.OR)) {
-            if (!not)
-                queryBuilder.should(query);
-            else
-                queryBuilder.should(boolQuery().mustNot(query));
-        }
     }
 
     private void applyQueryString(BoolQueryBuilder queryBuilder, final Queryable request) {

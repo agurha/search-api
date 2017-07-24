@@ -10,5 +10,7 @@ public interface SettingsAdapter<T, U> {
 
     void checkIndex(Indexable request);
 
+    void checkFieldName(String index, String fieldName);
+
     String getFieldType(String index, String fieldName);
 }

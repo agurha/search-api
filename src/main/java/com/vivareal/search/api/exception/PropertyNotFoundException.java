@@ -7,7 +7,7 @@ import java.util.function.BiFunction;
  */
 public class PropertyNotFoundException extends IllegalArgumentException {
 
-    private static final BiFunction<String, String, String> ERROR_MESSAGE = (property, index) -> String.format("Property %s not found for index %s", property, index);
+    private static final BiFunction<String, String, String> ERROR_MESSAGE = (property, index) -> String.format("Property [ %s ] not found for index [ %s ]", property, index);
 
     public PropertyNotFoundException(final String property, final String index) {
         super(ERROR_MESSAGE.apply(property, index));
