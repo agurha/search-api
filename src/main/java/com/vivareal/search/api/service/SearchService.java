@@ -40,6 +40,9 @@ public class SearchService {
     @Autowired
     private ElasticSearchStream elasticSearch;
 
+    @Autowired
+    private FilterInferenceService filterInferenceService;
+
     public Optional<Object> getById(BaseApiRequest request, String id) {
         try {
             GetResponse response = this.queryAdapter.getById(request, id).execute().get(ES_CONTROLLER_SEARCH_TIMEOUT.getValue(request.getIndex()), TimeUnit.MILLISECONDS);
@@ -55,6 +58,8 @@ public class SearchService {
     public SearchApiResponse search(SearchApiRequest request) {
         String index = request.getIndex();
         request.setPaginationValues(ES_DEFAULT_SIZE.getValue(index), ES_MAX_SIZE.getValue(index));
+
+        filterInferenceService.groupQueryClauses(request);
 
         SearchRequestBuilder requestBuilder = this.queryAdapter.query(request);
         SearchResponse esResponse = requestBuilder.execute().actionGet((Long) ES_CONTROLLER_SEARCH_TIMEOUT.getValue(index));
