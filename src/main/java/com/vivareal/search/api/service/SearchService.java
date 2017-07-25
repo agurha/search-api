@@ -59,7 +59,8 @@ public class SearchService {
         String index = request.getIndex();
         request.setPaginationValues(ES_DEFAULT_SIZE.getValue(index), ES_MAX_SIZE.getValue(index));
 
-        filterInferenceService.groupQueryClauses(request);
+        // FIXME - Gambi hackweek
+        filterInferenceService.appendInferedFilters(request);
 
         SearchRequestBuilder requestBuilder = this.queryAdapter.query(request);
         SearchResponse esResponse = requestBuilder.execute().actionGet((Long) ES_CONTROLLER_SEARCH_TIMEOUT.getValue(index));

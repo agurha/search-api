@@ -1,6 +1,7 @@
 package com.vivareal.search.api.service;
 
 import com.vivareal.search.api.model.http.SearchApiRequest;
+import com.vivareal.search.api.model.query.LogicalOperator;
 import org.apache.commons.lang3.StringUtils;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
@@ -18,11 +19,16 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.vivareal.search.api.model.query.LogicalOperator.AND;
+import static java.lang.String.format;
 import static java.util.Arrays.stream;
 import static java.util.Collections.emptyList;
+import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
 import static java.util.stream.IntStream.rangeClosed;
+import static org.apache.commons.lang3.StringUtils.isBlank;
+import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.elasticsearch.index.query.QueryBuilders.*;
 
 @Service
@@ -32,17 +38,28 @@ public class FilterInferenceService {
     private static Logger LOG = LoggerFactory.getLogger(FilterInferenceService.class);
 
     private static final String _SEARCH_ALL = "_search_all";
+    private static final LogicalOperator DEFAULT_LOGICAL_OP = AND;
 
     @Autowired
     private TransportClient transportClient;
 
-    public List<String> groupQueryClauses(SearchApiRequest request) {
-        if (StringUtils.isBlank(request.getQ()))
-            return null;
+    public void appendInferedFilters(SearchApiRequest request) {
+        if (isBlank(request.getQ()))
+            return;
 
-        List<String> filter = executeRequest(requestForFilterInference(request));
-        LOG.debug("Additional filters infered for '{}' : '{}'", request.getQ(), filter);
-        return filter;
+        String additionalFilters = executeRequest(requestForFilterInference(request)).stream().collect(joining(format(" %s ", AND.name())));
+        LOG.debug("Additional filters infered for '{}' : '{}'", request.getQ(), additionalFilters);
+
+        if(isBlank(additionalFilters))
+            return;
+
+
+        String originalFilter = request.getFilter();
+        if(isNotBlank(request.getFilter())) {
+            request.setFilter(format("%s %s (%s)", originalFilter, AND.name(), additionalFilters));
+        } else {
+            request.setFilter(additionalFilters);
+        }
     }
 
     private List<List<String>> getQWordsCombinations(String[] splitedWords) {
