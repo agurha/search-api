@@ -1,0 +1,13 @@
+GET discovery-fields/_search
+{
+    "suggest": {
+        "discovery-fields" : {
+            "prefix" : "sao p",
+            "completion" : {
+                "field" : "suggest",
+                "size": 10
+            }
+        }
+    }
+}
+

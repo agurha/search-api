@@ -1,0 +1,53 @@
+PUT discovery-fields
+{
+  "settings": {
+    "index": {
+      "analysis": {
+        "filter": {
+          "brazilian_stemmer": {
+            "type": "stemmer",
+            "language": "brazilian"
+          }
+        },
+        "analyzer": {
+          "searchable_text": {
+            "filter": [
+              "word_delimiter",
+              "lowercase",
+              "asciifolding",
+              "brazilian_stemmer"
+            ],
+            "tokenizer": "standard"
+          }
+        }
+      }
+    }
+  },
+  "mappings": {
+    "discovery-fields": {
+      "properties": {
+        "suggest": {
+          "type": "completion",
+          "analyzer": "searchable_text"
+        },
+        "filter": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "_search_all": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
