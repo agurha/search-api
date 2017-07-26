@@ -16,9 +16,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
+import static com.google.common.collect.Lists.newArrayList;
+import static com.google.common.collect.Maps.newHashMap;
+import static com.google.common.collect.Sets.newHashSet;
 import static com.vivareal.search.api.model.query.LogicalOperator.AND;
 import static java.lang.String.format;
 import static java.util.Arrays.stream;
@@ -47,7 +49,39 @@ public class FilterInferenceService {
         if (isBlank(request.getQ()))
             return;
 
-        String additionalFilters = executeRequest(requestForFilterInference(request)).stream().collect(joining(format(" %s ", AND.name())));
+        Set<String> filters = newHashSet(executeRequest(requestForFilterInference(request)));
+        Map<String, Set<String>> filtersMap = newHashMap();
+
+        filters.forEach(filter -> {
+            String[] filtersArr = filter.split(":");
+            String field = filtersArr[0];
+            String value = filtersArr[1];
+
+            if (filtersMap.containsKey(field)) {
+                filtersMap.get(field).add(value);
+            } else {
+                filtersMap.put(field, newHashSet(value));
+            }
+        });
+
+        Set<String> setFiltersByQ = new HashSet<>(Arrays.asList(request.getQ().toLowerCase().split("\\s+")));
+
+        filters.clear();
+        filtersMap.forEach((k, v) -> {
+            if (v.size() == 1) {
+                filters.add(k + ":" + newArrayList(v).get(0));
+            } else {
+                StringBuilder value = new StringBuilder();
+                v.forEach(s -> {
+                    if (setFiltersByQ.containsAll(new HashSet<>(Arrays.asList(s.replaceAll("'", "").toLowerCase().split("\\s+")))))
+                        value.append(s).append(",");
+                });
+                if (!value.toString().isEmpty())
+                    filters.add(k + " IN [ " + value.toString().replaceAll("(,)*$", "") + " ]");
+            }
+        });
+
+        String additionalFilters = filters.stream().collect(joining(format(" %s ", AND.name())));
         LOG.debug("Additional filters infered for '{}' : '{}'", request.getQ(), additionalFilters);
 
         if(isBlank(additionalFilters))
