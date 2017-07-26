@@ -49,9 +49,26 @@ public class FilterInferenceService {
         if (isBlank(request.getQ()))
             return;
 
-        Set<String> filters = newHashSet(executeRequest(requestForFilterInference(request)));
-        Map<String, Set<String>> filtersMap = newHashMap();
+        List<String> filters = newArrayList(newHashSet(executeRequest(requestForFilterInference(request))));
+        Map<String, List<String>> filtersMap = newHashMap();
+        applyINOperatorBySameField(request.getQ(), filters, filtersMap);
+        composeFiltersBySameParentField(filters, filtersMap);
 
+        String additionalFilters = filters.stream().collect(joining(format(" %s ", AND.name())));
+        LOG.debug("Additional filters infered for '{}' : '{}'", request.getQ(), additionalFilters);
+
+        if(isBlank(additionalFilters))
+            return;
+
+        String originalFilter = request.getFilter();
+        if(isNotBlank(request.getFilter())) {
+            request.setFilter(format("%s %s (%s)", originalFilter, AND.name(), additionalFilters));
+        } else {
+            request.setFilter(additionalFilters);
+        }
+    }
+
+    private void applyINOperatorBySameField(final String q, List<String> filters, Map<String, List<String>> filtersMap) {
         filters.forEach(filter -> {
             String[] filtersArr = filter.split(":");
             String field = filtersArr[0];
@@ -60,16 +77,16 @@ public class FilterInferenceService {
             if (filtersMap.containsKey(field)) {
                 filtersMap.get(field).add(value);
             } else {
-                filtersMap.put(field, newHashSet(value));
+                filtersMap.put(field, newArrayList(value));
             }
         });
 
-        Set<String> setFiltersByQ = new HashSet<>(Arrays.asList(request.getQ().toLowerCase().split("\\s+")));
+        Set<String> setFiltersByQ = new HashSet<>(Arrays.asList(q.toLowerCase().split("\\s+")));
 
         filters.clear();
         filtersMap.forEach((k, v) -> {
             if (v.size() == 1) {
-                filters.add(k + ":" + newArrayList(v).get(0));
+                filters.add(k + ":" + v.get(0));
             } else {
                 StringBuilder value = new StringBuilder();
                 v.forEach(s -> {
@@ -80,20 +97,40 @@ public class FilterInferenceService {
                     filters.add(k + " IN [ " + value.toString().replaceAll("(,)*$", "") + " ]");
             }
         });
+    }
 
-        String additionalFilters = filters.stream().collect(joining(format(" %s ", AND.name())));
-        LOG.debug("Additional filters infered for '{}' : '{}'", request.getQ(), additionalFilters);
+    private void composeFiltersBySameParentField(List<String> filters, Map<String, List<String>> filtersMap) {
+        filtersMap.clear();
+        filters.forEach(filter -> {
+            String field = filter.split(":")[0];
+            if (field.contains(".")) {
+                String parentField = field.split("\\.")[0];
+                if (filtersMap.containsKey(parentField)) {
+                    filtersMap.get(parentField).add(filter);
+                } else {
+                    filtersMap.put(parentField, newArrayList(filter));
+                }
+            } else {
+                filtersMap.put(field, newArrayList(filter));
+            }
+        });
 
-        if(isBlank(additionalFilters))
-            return;
-
-
-        String originalFilter = request.getFilter();
-        if(isNotBlank(request.getFilter())) {
-            request.setFilter(format("%s %s (%s)", originalFilter, AND.name(), additionalFilters));
-        } else {
-            request.setFilter(additionalFilters);
-        }
+        filters.clear();
+        filtersMap.forEach((field, appliedFilters) -> {
+            if (appliedFilters.size() > 1) {
+                StringBuilder composeFilters = new StringBuilder();
+                composeFilters.append(" ( ");
+                for (int i = 0; i < appliedFilters.size(); i++) {
+                    composeFilters.append(appliedFilters.get(i));
+                    if ((i + 1) < appliedFilters.size())
+                        composeFilters.append(" OR ");
+                }
+                composeFilters.append(" ) ");
+                filters.add(composeFilters.toString());
+            } else {
+                filters.add(appliedFilters.get(0));
+            }
+        });
     }
 
     private List<List<String>> getQWordsCombinations(String[] splitedWords) {
