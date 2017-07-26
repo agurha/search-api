@@ -82,7 +82,8 @@ public class SearchService {
                         Arrays.stream(esResponse.getHits().getHits())
                         .map(SearchHit::getSource)
                         .collect(toCollection(() -> synchronizedList(new ArrayList<>(esResponse.getHits().getHits().length)))))
-                .facets(ofNullable(esResponse.getAggregations()));
+                .facets(ofNullable(esResponse.getAggregations()))
+                .filter(request.getFilter());
     }
 
     public void stream(BaseApiRequest request, OutputStream stream) {
