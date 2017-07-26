@@ -51,7 +51,7 @@ import static org.mockito.MockitoAnnotations.initMocks;
 import static org.springframework.test.util.ReflectionTestUtils.setField;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
-@RunWith(com.carrotsearch.randomizedtesting.RandomizedRunner.class)
+//@RunWith(com.carrotsearch.randomizedtesting.RandomizedRunner.class)
 public class ElasticsearchQueryAdapterTest {
 
     private QueryAdapter<GetRequestBuilder, SearchRequestBuilder> queryAdapter;

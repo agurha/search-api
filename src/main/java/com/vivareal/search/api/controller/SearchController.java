@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import springfox.documentation.annotations.ApiIgnore;
@@ -81,5 +82,22 @@ public class SearchController {
     public StreamingResponseBody stream(BaseApiRequest request, HttpServletResponse httpServletResponse) {
         httpServletResponse.setContentType("application/x-ndjson;charset=UTF-8");
         return out -> searchService.stream(request, out);
+    }
+
+    @RequestMapping(value = "/suggest", method = GET, produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+    @ApiOperation(value = "Search suggestions", notes = "Returns suggestions")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "Successfully get documents"),
+        @ApiResponse(code = 400, message = "Bad parameters request"),
+        @ApiResponse(code = 500, message = "Internal Server Error")
+    })
+    public ResponseEntity<Object> suggest(@RequestParam String text) {
+        try {
+            return new ResponseEntity<>(searchService.suggest(text), OK);
+        } catch (IllegalArgumentException ex) {
+            String errorMessage = getRootCauseMessage(ex);
+            LOG.error(errorMessage);
+            return new ResponseEntity<>(new SearchApiResponseError(errorMessage, text), BAD_REQUEST);
+        }
     }
 }

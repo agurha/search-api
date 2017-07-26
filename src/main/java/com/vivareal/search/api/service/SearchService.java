@@ -10,6 +10,10 @@ import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.suggest.Suggest.Suggestion;
+import org.elasticsearch.search.suggest.Suggest.Suggestion.Entry;
+import org.elasticsearch.search.suggest.Suggest.Suggestion.Entry.Option;
+import org.elasticsearch.search.suggest.completion.CompletionSuggestion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,13 +24,16 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static com.vivareal.search.api.configuration.environment.RemoteProperties.*;
 import static java.util.Collections.synchronizedList;
 import static java.util.Optional.empty;
 import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.toCollection;
+import static java.util.stream.Collectors.toList;
 
 @Component
 public class SearchService {
@@ -42,6 +49,9 @@ public class SearchService {
 
     @Autowired
     private FilterInferenceService filterInferenceService;
+
+    @Autowired
+    private SuggestService suggestService;
 
     public Optional<Object> getById(BaseApiRequest request, String id) {
         try {
@@ -77,5 +87,12 @@ public class SearchService {
 
     public void stream(BaseApiRequest request, OutputStream stream) {
         elasticSearch.stream(request, stream);
+    }
+
+    // FIXME - Gambi hackweek
+    public Object suggest(String text) {
+        SearchResponse esResponse = suggestService.getSuggestions(text);
+        CompletionSuggestion suggestion = esResponse.getSuggest().getSuggestion("discovery-fields");
+        return suggestion.getOptions().stream().map(opt -> opt.getText().string()).collect(toCollection(() -> new TreeSet<>()));
     }
 }
