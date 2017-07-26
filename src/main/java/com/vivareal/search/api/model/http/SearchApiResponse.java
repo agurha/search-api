@@ -1,14 +1,18 @@
 package com.vivareal.search.api.model.http;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.vivareal.search.api.model.query.RelationalOperator;
+import org.apache.commons.lang3.StringUtils;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.terms.InternalMappedTerms;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static java.util.stream.Collectors.joining;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class SearchApiResponse {
@@ -44,6 +48,42 @@ public final class SearchApiResponse {
             }
         );
         return this;
+    }
+
+
+    private static final Set<String> RELATIONAL_OPERATORS = Stream.of(RelationalOperator.getOperators()).sorted((o1, o2) -> {
+            int comparationByLength = Integer.compare(o2.length(), o1.length());
+            return comparationByLength != 0 ? comparationByLength : o1.compareTo(o2);
+        }).collect(Collectors.toCollection(LinkedHashSet::new));
+    private static final String RELATIONAL_OPERATOR_SPLITTER = RELATIONAL_OPERATORS.stream().collect(joining("|"));
+
+    private Map<String, Set> filter;
+    public Map<String, Set> getFilter() { return filter; }
+
+    public SearchApiResponse filter(final String filterRaw) {
+        String[] filterChunks = StringUtils.trimToEmpty(filterRaw).split("( AND | OR | NOT |NOT |\\(|\\))");
+        Map<String, Set> requestFilters = new LinkedHashMap<>();
+        Stream.of(filterChunks)
+            .filter(this::hasRelationalOperator)
+            .map(chunk -> chunk.split(RELATIONAL_OPERATOR_SPLITTER))
+            .filter(item -> item.length == 2)
+            .forEach(item -> {
+                String filter = item[0], value = item[1];
+                if(!requestFilters.containsKey(filter))
+                    requestFilters.put(filter, new LinkedHashSet());
+                requestFilters.get(filter).add(value);
+            });
+
+        this.filter = requestFilters;
+        return this;
+    }
+
+    private boolean hasRelationalOperator(String filter) {
+        for (String ro : RELATIONAL_OPERATORS) {
+            if(filter.contains(ro))
+                return true;
+        }
+        return false;
     }
 
     private static Map<String, Long> addBuckets(List<?> objBuckets) {
