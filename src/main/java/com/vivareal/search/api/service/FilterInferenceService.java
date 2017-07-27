@@ -156,8 +156,13 @@ public class FilterInferenceService {
                 composeFilters.append(" ( ");
                 for (int i = 0; i < appliedFilters.size(); i++) {
                     composeFilters.append(appliedFilters.get(i));
-                    if ((i + 1) < appliedFilters.size())
-                        composeFilters.append(" OR ");
+                    if ((i + 1) < appliedFilters.size()) {
+                        if (field.startsWith("pricingInfos")) {
+                            composeFilters.append(" AND ");
+                        } else {
+                            composeFilters.append(" OR ");
+                        }
+                    }
                 }
                 composeFilters.append(" ) ");
                 filters.add(composeFilters.toString());
