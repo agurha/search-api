@@ -1,6 +1,6 @@
 buildscript {
     ext {
-        springBootVersion = '2.0.0.M1'
+        springBootVersion = '2.0.0.M3'
     }
 
     repositories {
@@ -93,7 +93,7 @@ dependencies {
     compile 'org.elasticsearch.client:transport:' + ELASTICSEARCH_VERSION
     compile 'org.elasticsearch:elasticsearch:' + ELASTICSEARCH_VERSION
 
-    compile 'org.glowroot:glowroot-agent-api:0.9.19'
+    compile 'org.glowroot:glowroot-agent-api:0.9.22'
     compile 'com.newrelic.agent.java:newrelic-api:' + NEW_RELIC_VERSION
     newRelic 'com.newrelic.agent.java:newrelic-agent:' + NEW_RELIC_VERSION
 
@@ -110,7 +110,7 @@ dependencies {
 }
 
 task wrapper(type: Wrapper) {
-    gradleVersion = '4.0.1'
+    gradleVersion = '4.0.2'
 }
 
 bootRun {
