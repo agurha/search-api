@@ -2,7 +2,6 @@ package com.vivareal.search.api.service;
 
 import com.vivareal.search.api.model.http.SearchApiRequest;
 import com.vivareal.search.api.model.query.LogicalOperator;
-import org.apache.commons.lang3.StringUtils;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.transport.TransportClient;
@@ -10,7 +9,6 @@ import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.MatchQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.SpanNearQueryBuilder;
-import org.elasticsearch.search.SearchHit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,17 +18,16 @@ import java.util.*;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Maps.newHashMap;
-import static com.google.common.collect.Sets.newHashSet;
 import static com.vivareal.search.api.model.query.LogicalOperator.AND;
 import static java.lang.String.format;
+import static java.lang.String.valueOf;
 import static java.util.Arrays.stream;
-import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
 import static java.util.stream.IntStream.rangeClosed;
-import static org.apache.commons.lang3.StringUtils.isBlank;
-import static org.apache.commons.lang3.StringUtils.isNotBlank;
+import static org.apache.commons.lang3.StringUtils.*;
 import static org.elasticsearch.index.query.QueryBuilders.*;
 
 @Service
@@ -49,9 +46,16 @@ public class FilterInferenceService {
         if (isBlank(request.getQ()))
             return;
 
-        List<String> filters = newArrayList(newHashSet(executeRequest(requestForFilterInference(request))));
+        StringBuilder q = new StringBuilder();
+        q.append(request.getQ());
+
+        Map<String, Boolean> filterAlias = executeRequest(requestForFilterInference(request));
+        List<String> filters = newArrayList();
+
+        composeFilters(filterAlias, filters, q);
+
         Map<String, List<String>> filtersMap = newHashMap();
-        applyINOperatorBySameField(request.getQ(), filters, filtersMap);
+        applyINOperatorBySameField(q.toString(), filters, filtersMap);
         composeFiltersBySameParentField(filters, filtersMap);
 
         String additionalFilters = filters.stream().collect(joining(format(" %s ", AND.name())));
@@ -68,16 +72,38 @@ public class FilterInferenceService {
         }
     }
 
+    private void composeFilters(final Map<String, Boolean> filterAlias, List<String> filters, StringBuilder q) {
+        filterAlias.forEach((filter, alias) -> {
+            if (alias) {
+                stream(filter.split(" OR ")).forEach(
+                    f -> {
+                        q.append(" ").append(f.split(":")[1].replaceAll("'", ""));
+                        filters.add(f);
+                    }
+                );
+            } else {
+                filters.add(filter);
+            }
+        });
+    }
+
     private void applyINOperatorBySameField(final String q, List<String> filters, Map<String, List<String>> filtersMap) {
+
+        List<String> filtersClearly = newArrayList();
+
         filters.forEach(filter -> {
-            String[] filtersArr = filter.split(":");
+            String[] filtersArr = trimToEmpty(filter).split(":|<>|<=|>=|<|>");
             String field = filtersArr[0];
             String value = filtersArr[1];
 
-            if (filtersMap.containsKey(field)) {
-                filtersMap.get(field).add(value);
+            if (filter.contains(":")) {
+                if (filtersMap.containsKey(field) && !value.contains("(")) {
+                    filtersMap.get(field).add(value);
+                } else {
+                    filtersMap.put(field, newArrayList(value));
+                }
             } else {
-                filtersMap.put(field, newArrayList(value));
+                filtersClearly.add(filter);
             }
         });
 
@@ -97,12 +123,16 @@ public class FilterInferenceService {
                     filters.add(k + " IN [ " + value.toString().replaceAll("(,)*$", "") + " ]");
             }
         });
+        filters.addAll(filtersClearly);
     }
 
     private void composeFiltersBySameParentField(List<String> filters, Map<String, List<String>> filtersMap) {
         filtersMap.clear();
         filters.forEach(filter -> {
-            String field = filter.split(":")[0];
+
+            String[] filtersArr = trimToEmpty(filter).split(":|<>|<=|>=|<|>");
+            String field = filtersArr[0];
+
             if (field.contains(".")) {
                 String parentField = field.split("\\.")[0];
                 if (filtersMap.containsKey(parentField)) {
@@ -111,7 +141,11 @@ public class FilterInferenceService {
                     filtersMap.put(parentField, newArrayList(filter));
                 }
             } else {
-                filtersMap.put(field, newArrayList(filter));
+                if (filtersMap.containsKey(field)) {
+                    filtersMap.get(field).add(filter);
+                } else {
+                    filtersMap.put(field, newArrayList(filter));
+                }
             }
         });
 
@@ -171,17 +205,21 @@ public class FilterInferenceService {
         return searchBuilder;
     }
 
-    private List<String> executeRequest(SearchRequestBuilder searchBuilder) {
+    private Map<String, Boolean> executeRequest(SearchRequestBuilder searchBuilder) {
         try {
-            SearchResponse searchResponse = searchBuilder.execute().actionGet(500l);
-            return stream(searchResponse.getHits().getHits())
-                .map(SearchHit::getSource)
-                .map(map -> (String) map.get("filter"))
-                .filter(StringUtils::isNotBlank)
-                .collect(toList());
+            SearchResponse searchResponse = searchBuilder.execute().actionGet(500L);
+            Map<String, Boolean> result = newHashMap();
+            stream(searchResponse.getHits().getHits()).forEach(
+                searchHitFields -> {
+                    Map<String, Object> source = searchHitFields.getSource();
+                    result.put(valueOf(source.get("filter")), Boolean.parseBoolean(valueOf(source.get("alias"))));
+                }
+            );
+            return result;
+
         } catch (Exception e) {
             LOG.error("Unable to infer filters for {}", searchBuilder);
-            return emptyList();
+            return emptyMap();
         }
     }
 }
