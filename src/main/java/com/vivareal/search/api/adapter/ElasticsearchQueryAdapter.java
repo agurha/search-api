@@ -7,6 +7,7 @@ import com.vivareal.search.api.model.parser.QueryParser;
 import com.vivareal.search.api.model.parser.SortParser;
 import com.vivareal.search.api.model.query.*;
 import com.vivareal.search.api.model.search.*;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.elasticsearch.action.get.GetRequestBuilder;
@@ -88,8 +89,16 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
             applySort(searchBuilder, request);
             applyFacetFields(searchBuilder, request);
 
-            applyQueryString(queryBuilder, request);
-            applyFilterQuery(queryBuilder, request);
+            boolean hasAppliedQ = applyQueryString(queryBuilder, request);
+
+            if (hasAppliedQ && request.getFilter() != null) {
+                BoolQueryBuilder boolQueryBuilder = boolQuery();
+                boolQueryBuilder.boost(10);
+                queryBuilder.should(boolQueryBuilder);
+                applyFilterQuery(boolQueryBuilder, request);
+            } else {
+                applyFilterQuery(queryBuilder, request);
+            }
         });
     }
 
@@ -206,7 +215,7 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
         }
     }
 
-    private void applyQueryString(BoolQueryBuilder queryBuilder, final Queryable request) {
+    private boolean applyQueryString(BoolQueryBuilder queryBuilder, final Queryable request) {
         if (!isEmpty(request.getQ())) {
             QueryStringQueryBuilder queryStringBuilder = queryStringQuery(request.getQ());
             String index = request.getIndex();
@@ -218,8 +227,10 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
 
             Map<String, Float> fields = new HashMap<>();
             queryStringBuilder.fields(fields).minimumShouldMatch(mm).tieBreaker(0.2f).phraseSlop(2).defaultOperator(OR);
-            queryBuilder.must().add(queryStringBuilder);
+            queryBuilder.should().add(queryStringBuilder);
+            return true;
         }
+        return false;
     }
 
     private void checkMM(final String mm, final Queryable request) {
