@@ -13,6 +13,7 @@ import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.joining;
 import static org.apache.commons.lang3.StringUtils.substringAfter;
+import static org.apache.commons.lang3.StringUtils.substringBefore;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class SearchApiResponse {
@@ -75,10 +76,10 @@ public final class SearchApiResponse {
                 if(item.length != 2)
                     return;
 
-                String field = item[0];
+                String field = item[0], value = item[1];
                 if(!requestFilters.containsKey(field))
                     requestFilters.put(field, new LinkedHashSet());
-                requestFilters.get(field).add(substringAfter(filter, field));
+                requestFilters.get(field).add(substringBefore(substringAfter(filter, field), value) + " " + value);
             });
         this.filter = requestFilters;
         return this;
