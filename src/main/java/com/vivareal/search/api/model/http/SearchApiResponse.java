@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.joining;
+import static org.apache.commons.lang3.StringUtils.substringAfter;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class SearchApiResponse {
@@ -69,15 +70,16 @@ public final class SearchApiResponse {
         Map<String, Set> requestFilters = new LinkedHashMap<>();
         Stream.of(filterChunks)
             .filter(this::hasRelationalOperator)
-            .map(chunk -> chunk.split(RELATIONAL_OPERATOR_SPLITTER))
-            .filter(item -> item.length == 2)
-            .forEach(item -> {
-                String filter = item[0], value = item[1];
-                if(!requestFilters.containsKey(filter))
-                    requestFilters.put(filter, new LinkedHashSet());
-                requestFilters.get(filter).add(value);
-            });
+            .forEach(filter -> {
+                String[] item = filter.split(RELATIONAL_OPERATOR_SPLITTER);
+                if(item.length != 2)
+                    return;
 
+                String field = item[0];
+                if(!requestFilters.containsKey(field))
+                    requestFilters.put(field, new LinkedHashSet());
+                requestFilters.get(field).add(substringAfter(filter, field));
+            });
         this.filter = requestFilters;
         return this;
     }
