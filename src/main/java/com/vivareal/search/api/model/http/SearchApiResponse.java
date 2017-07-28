@@ -76,10 +76,10 @@ public final class SearchApiResponse {
                 if(item.length != 2)
                     return;
 
-                String field = item[0], value = item[1];
+                String field = item[0], value = item[1], ro = substringAfter(substringBefore(filter, value), field);
                 if(!requestFilters.containsKey(field))
                     requestFilters.put(field, new LinkedHashSet());
-                requestFilters.get(field).add(substringBefore(substringAfter(filter, field), value) + " " + value);
+                requestFilters.get(field).add(ro + " " + value);
             });
         this.filter = requestFilters;
         return this;
