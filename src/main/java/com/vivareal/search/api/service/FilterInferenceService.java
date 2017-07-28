@@ -96,7 +96,14 @@ public class FilterInferenceService {
         });
     }
 
-    private void applyINOperatorBySameField(final String q, List<String> filters, Map<String, List<String>> filtersMap) {
+    private void applyINOperatorBySameField(final String q, List<String> filtersRaw, Map<String, List<String>> filtersMap) {
+        List<String> filters = newArrayList();
+        filtersRaw.stream().forEach(f -> {
+            String[] split = trimToEmpty(f).split("( AND | OR | NOT |NOT |\\(|\\))");
+            if(split.length > 0) {
+                filters.addAll(Arrays.asList(split));
+            }
+        });
 
         List<String> filtersClearly = newArrayList();
 
