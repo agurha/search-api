@@ -24,11 +24,14 @@ import static java.lang.String.format;
 import static java.lang.String.valueOf;
 import static java.util.Arrays.stream;
 import static java.util.Collections.emptyMap;
+import static java.util.Optional.empty;
+import static java.util.Optional.of;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
 import static java.util.stream.IntStream.rangeClosed;
 import static org.apache.commons.lang3.StringUtils.*;
+import static org.elasticsearch.common.util.set.Sets.newHashSet;
 import static org.elasticsearch.index.query.QueryBuilders.*;
 
 @Service
@@ -39,6 +42,11 @@ public class FilterInferenceService {
 
     private static final String _SEARCH_ALL = "_search_all";
     private static final LogicalOperator DEFAULT_LOGICAL_OP = AND;
+
+    private static final Set<String> BLACKLIST_FOR_SINGLE_WORDS = newHashSet(
+        "quarto", "quartos", "area", "areas",
+        "banheiro", "banheiros", "vaga", "vagas",
+        "suite", "suites", "metro", "metros" );
 
     @Autowired
     private TransportClient transportClient;
@@ -173,7 +181,7 @@ public class FilterInferenceService {
         });
     }
 
-    private static final int WORD_GROUPS_MAX_SIZE = 5;
+    private static final int WORD_GROUPS_MAX_SIZE = 6;
 
     private List<List<String>> getQWordsCombinations(String[] splitedWords) {
         List<String> words = stream(splitedWords).collect(toList());
@@ -186,23 +194,27 @@ public class FilterInferenceService {
     private BoolQueryBuilder createQueryForCombinations(List<List<String>> combinations) {
         BoolQueryBuilder boolQuery = boolQuery();
         combinations.forEach(combination -> {
-            QueryBuilder query = combination.size() > 1 ? spanNearQueryBuilder(combination) : matchQueryBuilder(combination);
-            boolQuery.should().add(query);
+            Optional<QueryBuilder> query = combination.size() > 1 ? spanNearQueryBuilder(combination) : matchQueryBuilder(combination);
+            query.ifPresent(boolQuery.should()::add);
         });
         return boolQuery;
     }
 
-    private QueryBuilder matchQueryBuilder(List<String> combination) {
-        return new MatchQueryBuilder(_SEARCH_ALL + ".keyword", combination.get(0));
+    private Optional<QueryBuilder> matchQueryBuilder(List<String> combination) {
+        if(combination.size() != 1 || BLACKLIST_FOR_SINGLE_WORDS.contains(combination.get(0).toLowerCase())) {
+            return empty();
+        }
+
+        return of(new MatchQueryBuilder(_SEARCH_ALL + ".keyword", combination.get(0)));
     }
 
-    private QueryBuilder spanNearQueryBuilder(List<String> combination) {
+    private Optional<QueryBuilder> spanNearQueryBuilder(List<String> combination) {
         SpanNearQueryBuilder queryBuilder = spanNearQuery(spanTermQuery(_SEARCH_ALL, combination.get(0)), 1);
         range(1, combination.size())
             .boxed()
             .map(combination::get)
             .forEach(clause -> queryBuilder.addClause(spanTermQuery(_SEARCH_ALL, clause)));
-        return queryBuilder.inOrder(true).queryName("Combination: " + combination.toString());
+        return Optional.of(queryBuilder.inOrder(true).queryName("Combination: " + combination.toString()));
     }
 
     private SearchRequestBuilder requestForFilterInference(SearchApiRequest request) {

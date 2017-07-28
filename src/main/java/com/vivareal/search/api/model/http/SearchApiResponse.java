@@ -8,7 +8,6 @@ import org.elasticsearch.search.aggregations.bucket.terms.InternalMappedTerms;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 
 import java.util.*;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -54,7 +53,12 @@ public final class SearchApiResponse {
     private static final Set<String> RELATIONAL_OPERATORS = Stream.of(RelationalOperator.getOperators()).sorted((o1, o2) -> {
             int comparationByLength = Integer.compare(o2.length(), o1.length());
             return comparationByLength != 0 ? comparationByLength : o1.compareTo(o2);
-        }).collect(Collectors.toCollection(LinkedHashSet::new));
+        })
+        .filter(op -> !StringUtils.isAlphanumeric(op))
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+    static {
+        RELATIONAL_OPERATORS.add(" IN ");
+    }
     private static final String RELATIONAL_OPERATOR_SPLITTER = RELATIONAL_OPERATORS.stream().collect(joining("|"));
 
     private Map<String, Set> filter;
