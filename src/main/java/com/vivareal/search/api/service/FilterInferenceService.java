@@ -19,6 +19,7 @@ import java.util.*;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Maps.newHashMap;
 import static com.vivareal.search.api.model.query.LogicalOperator.AND;
+import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.lang.String.valueOf;
 import static java.util.Arrays.stream;
@@ -172,11 +173,13 @@ public class FilterInferenceService {
         });
     }
 
+    private static final int WORD_GROUPS_MAX_SIZE = 5;
+
     private List<List<String>> getQWordsCombinations(String[] splitedWords) {
         List<String> words = stream(splitedWords).collect(toList());
 
         List<List<String>> combinations = new ArrayList<>();
-        range(0, words.size()).forEach(i -> rangeClosed(i + 1, words.size()).forEach(j -> combinations.add(words.subList(i, j))));
+        range(0, words.size()).forEach(i -> rangeClosed(i + 1, min(i + WORD_GROUPS_MAX_SIZE, words.size())).forEach(j -> combinations.add(words.subList(i, j))));
         return combinations;
     }
 
@@ -213,6 +216,7 @@ public class FilterInferenceService {
     private Map<String, Boolean> executeRequest(SearchRequestBuilder searchBuilder) {
         try {
             SearchResponse searchResponse = searchBuilder.execute().actionGet(500L);
+            LOG.info("Inference filter took: " + searchResponse.getTookInMillis() + "ms");
             Map<String, Boolean> result = newHashMap();
             stream(searchResponse.getHits().getHits()).forEach(
                 searchHitFields -> {
