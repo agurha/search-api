@@ -1,0 +1,46 @@
+version: 2
+
+jobs:
+  build:
+    machine:
+      enabled: true
+
+    environment:
+      _JAVA_OPTIONS: "-Xms256m -Xmx256m"
+      GRADLE_OPTS: "-Xms256m -Xmx256m"
+
+    steps:
+      - checkout
+      - run: git submodule sync --recursive
+      - run: git submodule update --init --recursive
+
+      - run:
+          name: Install dependencies
+          command: |
+            aws s3 cp s3://develop-br/scripts/circleci/circleci-tunnel.sh ~/ && chmod +x ~/circleci-tunnel.sh
+
+      - run:
+          name: Open tunnel
+          command: ~/circleci-tunnel.sh start
+          background: true
+
+      - run: docker login -u $DOCKERHUB_USER -p $DOCKERHUB_PASSWORD
+
+      - restore_cache:
+          key: searchapi-{{ checksum "gradle.properties" }}-{{ checksum "build.gradle" }}
+
+      - run: make GRADLE_EXTRA_ARGS="-PnewRelicKey=$NEW_RELIC_KEY" build
+      - run: mkdir -p $CIRCLE_TEST_REPORTS/junit/
+      - run: find . -type f -regex ".*/build/test-results/.*xml" -exec cp {} $CIRCLE_TEST_REPORTS/junit/ \;
+
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: searchapi-{{ checksum "gradle.properties" }}-{{ checksum "build.gradle" }}
+
+      - deploy:
+          name: Create artifact
+          command: |
+            if [ "${CIRCLE_BRANCH}" == "master" ]; then
+              make ENV=qa SLK_TOKEN=$SLK_TOKEN GRADLE_EXTRA_ARGS="-x test -PnewRelicKey=$NEW_RELIC_KEY" analise-code push-with-notification
+            fi
