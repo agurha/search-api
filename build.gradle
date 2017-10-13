@@ -138,7 +138,9 @@ task wrapper(type: Wrapper) {
 }
 
 bootRun {
-    systemProperties = System.properties
+    execSpec {
+        systemProperties = System.properties
+  }
 }
 
 task newrelicDeps(dependsOn: 'bootJar') {
@@ -169,9 +171,7 @@ task copyJarForDockerCompose(dependsOn: 'newrelicDeps', type: Copy) {
 
 bootJar {
     baseName = artifactName - '.jar'
-    launchScript {
-        included = true
-    }
+    launchScript()
 }
 
 bootJar.finalizedBy copyJarForDockerCompose
