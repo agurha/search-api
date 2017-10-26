@@ -70,6 +70,11 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
     private final SortQueryAdapter sortQueryAdapter;
 
     @Autowired
+    private QueryParser queryParser;
+    @Autowired
+    private FacetParser facetParser;
+
+    @Autowired
     public ElasticsearchQueryAdapter(ESClient esClient,
                                      @Qualifier("elasticsearchSettings") SettingsAdapter<Map<String,
                                      Map<String, Object>>, String> settingsAdapter,
@@ -149,8 +154,10 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
     }
 
     public void applyFilterQuery(BoolQueryBuilder queryBuilder, final Filterable filter) {
-        ofNullable(filter.getFilter()).ifPresent(f -> applyFilterQuery(queryBuilder, QueryParser.parse(f), filter.getIndex(), newHashMap()));
+        ofNullable(filter.getFilter()).ifPresent(f -> applyFilterQuery(queryBuilder, queryParser.parse(f), filter.getIndex(), newHashMap()));
     }
+
+
 
     private void applyFilterQuery(BoolQueryBuilder queryBuilder, final QueryFragment queryFragment, final String indexName, Map<String, BoolQueryBuilder> nestedQueries) {
         if (queryFragment == null || !(queryFragment instanceof QueryFragmentList))
@@ -393,7 +400,7 @@ public class ElasticsearchQueryAdapter implements QueryAdapter<GetRequestBuilder
         final int facetSize = request.getFacetSize();
         final int shardSize = parseInt(String.valueOf(settingsAdapter.settingsByKey(request.getIndex(), SHARDS)));
 
-        FacetParser.parse(value.stream().collect(joining(","))).forEach(facet -> {
+        facetParser.parse(value.stream().collect(joining(","))).forEach(facet -> {
             final String fieldName = facet.getName();
             final String firstName = facet.firstName();
             settingsAdapter.checkFieldName(indexName, fieldName, false);

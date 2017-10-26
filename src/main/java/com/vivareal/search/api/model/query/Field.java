@@ -17,7 +17,7 @@ public class Field {
         this(false, names);
     }
 
-    private Field(boolean not, final List<String> names) {
+    public Field(boolean not, final List<String> names) {
 
         if (isEmpty(names)) {
             throw new IllegalArgumentException("The field name cannot be empty");
@@ -43,7 +43,7 @@ public class Field {
         return this.names.stream().collect(joining("."));
     }
 
-    private List<String> getNames() {
+    public List<String> getNames() {
         return this.names;
     }
 

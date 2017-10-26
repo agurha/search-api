@@ -1,16 +1,18 @@
 package com.vivareal.search.api.model.parser;
 
 import org.jparsec.Parser;
+import org.springframework.stereotype.Component;
 
 import static org.jparsec.Parsers.between;
 import static org.jparsec.Scanners.WHITESPACES;
 import static org.jparsec.Scanners.string;
 
+@Component
 public class NotParser {
 
-    private static final Parser<Boolean> NOT_PARSER = between(WHITESPACES.skipMany(), string("NOT").succeeds().label("not"), WHITESPACES.skipMany());
+    private final Parser<Boolean> NOT_PARSER = between(WHITESPACES.skipMany(), string("NOT").succeeds().label("not"), WHITESPACES.skipMany());
 
-    static Parser<Boolean> get() {
+    Parser<Boolean> get() {
         return NOT_PARSER;
     }
 }
