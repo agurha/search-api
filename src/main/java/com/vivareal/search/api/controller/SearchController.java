@@ -10,6 +10,7 @@ import com.vivareal.search.api.model.http.FilterableApiRequest;
 import com.vivareal.search.api.model.http.SearchApiRequest;
 import com.vivareal.search.api.model.serializer.SearchResponseEnvelope;
 import com.vivareal.search.api.service.SearchService;
+import com.vivareal.search.api.service.parser.IndexValidator;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiResponse;
@@ -56,6 +57,9 @@ public class SearchController {
     private static final ResponseEntity<Object> notFoundResponse = notFound().build();
 
     @Autowired
+    private IndexValidator indexValidator;
+
+    @Autowired
     private SearchService searchService;
 
     @Autowired
@@ -83,6 +87,7 @@ public class SearchController {
     )
     @Trace(dispatcher=true)
     public ResponseEntity<Object> id(BaseApiRequest request, @PathVariable String id) throws InterruptedException, ExecutionException, TimeoutException {
+        indexValidator.validateIndex(request);
         GetResponse response = searchService.getById(request, id);
 
         if(response.isExists())
@@ -112,6 +117,7 @@ public class SearchController {
     )
     @Trace(dispatcher=true)
     public ResponseEntity<Object> search(SearchApiRequest request) {
+        indexValidator.validateIndex(request);
         return new ResponseEntity<>(new SearchResponseEnvelope<>(request.getIndex(), searchService.search(request)), OK);
     }
 
