@@ -22,7 +22,7 @@ public class SortQueryAdapter {
     private final SettingsAdapter<Map<String, Map<String, Object>>, String> settingsAdapter;
 
     @Autowired
-    SortParser sortParser;
+    public SortParser sortParser;
 
     public SortQueryAdapter(@Qualifier("elasticsearchSettings") SettingsAdapter<Map<String, Map<String, Object>>, String> settingsAdapter) {
         this.settingsAdapter = settingsAdapter;

@@ -13,15 +13,14 @@ import static org.jparsec.Scanners.isChar;
 @Component
 public class FieldParser {
 
-    @Autowired
-    private NotParser notParser;
+    private final Parser<Field> SIMPLE_KEYWORD_PARSER;
+    private final Parser<Field> SIMPLE_KEYWORD_PARSER_WITH_NOT;
 
     @Autowired
-    private FieldFactory fieldFactory;
-
-    private final Parser<Field> SIMPLE_KEYWORD_PARSER = IDENTIFIER.sepBy1(isChar('.')).label("field").map(fieldFactory::createField);
-
-    private final Parser<Field> SIMPLE_KEYWORD_PARSER_WITH_NOT = sequence(notParser.get(), SIMPLE_KEYWORD_PARSER, fieldFactory::createField);
+    public FieldParser(NotParser notParser, FieldFactory fieldFactory) {
+        SIMPLE_KEYWORD_PARSER = IDENTIFIER.sepBy1(isChar('.')).label("field").map(fieldFactory::createField);
+        SIMPLE_KEYWORD_PARSER_WITH_NOT = sequence(notParser.get(), SIMPLE_KEYWORD_PARSER, fieldFactory::createField);
+    }
 
     Parser<Field> get() {
         return SIMPLE_KEYWORD_PARSER;

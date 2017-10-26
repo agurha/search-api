@@ -103,18 +103,18 @@ public class SearchController {
         @ApiResponse(code = 400, message = "Bad parameters request"),
         @ApiResponse(code = 500, message = "Internal Server Error")
     })
-    @HystrixCommand(
-        commandProperties = {
-            @HystrixProperty(name = EXECUTION_TIMEOUT_ENABLED, value = "false"),
-            @HystrixProperty(name = CIRCUIT_BREAKER_SLEEP_WINDOW_IN_MILLISECONDS, value = "10000"),
-            @HystrixProperty(name = CIRCUIT_BREAKER_REQUEST_VOLUME_THRESHOLD, value = "30"),
-            @HystrixProperty(name = CIRCUIT_BREAKER_ERROR_THRESHOLD_PERCENTAGE, value = "70")
-        },
-        threadPoolProperties = {
-            @HystrixProperty(name = CORE_SIZE, value = MIN_SIZE),
-            @HystrixProperty(name = MAXIMUM_SIZE, value = MAX_SIZE)
-        }
-    )
+//    @HystrixCommand(
+//        commandProperties = {
+//            @HystrixProperty(name = EXECUTION_TIMEOUT_ENABLED, value = "false"),
+//            @HystrixProperty(name = CIRCUIT_BREAKER_SLEEP_WINDOW_IN_MILLISECONDS, value = "10000"),
+//            @HystrixProperty(name = CIRCUIT_BREAKER_REQUEST_VOLUME_THRESHOLD, value = "30"),
+//            @HystrixProperty(name = CIRCUIT_BREAKER_ERROR_THRESHOLD_PERCENTAGE, value = "70")
+//        },
+//        threadPoolProperties = {
+//            @HystrixProperty(name = CORE_SIZE, value = MIN_SIZE),
+//            @HystrixProperty(name = MAXIMUM_SIZE, value = MAX_SIZE)
+//        }
+//    )
     @Trace(dispatcher=true)
     public ResponseEntity<Object> search(SearchApiRequest request) {
         indexValidator.validateIndex(request);

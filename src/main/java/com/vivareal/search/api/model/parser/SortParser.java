@@ -14,12 +14,12 @@ import static org.jparsec.Scanners.isChar;
 @Component
 public class SortParser {
 
-    @Autowired
-    private FieldParser fieldParser;
-    @Autowired
-    private OperatorParser operatorParser;
+    private final Parser<Sort> SORT_PARSER;
 
-    private final Parser<Sort> SORT_PARSER = sequence(fieldParser.getWithoutNot(), operatorParser.ORDER_OPERATOR_PARSER.optional(OrderOperator.ASC), Sort::new).sepBy(isChar(',').next(WHITESPACES.skipMany())).label("sort").map(Sort::new);
+    @Autowired
+    public SortParser(FieldParser fieldParser, OperatorParser operatorParser) {
+        SORT_PARSER = sequence(fieldParser.getWithoutNot(), operatorParser.ORDER_OPERATOR_PARSER.optional(OrderOperator.ASC), Sort::new).sepBy(isChar(',').next(WHITESPACES.skipMany())).label("sort").map(Sort::new);
+    }
 
     @Trace
     public Sort parse(String string) {

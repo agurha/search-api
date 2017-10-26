@@ -14,7 +14,7 @@ public class FieldFactory {
     private IndexValidator indexValidator;
 
     public Field createField(List<String> names) {
-        return createField(names);
+        return createField(false, names);
     }
 
     public Field createField(Boolean not, Field field) {

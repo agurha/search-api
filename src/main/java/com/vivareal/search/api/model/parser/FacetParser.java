@@ -14,10 +14,12 @@ import static org.jparsec.Scanners.isChar;
 @Component
 public class FacetParser {
 
-    @Autowired
-    private FieldParser fieldParser;
+    private final Parser<List<Field>> FACET_PARSER;
 
-    private final Parser<List<Field>> FACET_PARSER = fieldParser.getWithoutNot().sepBy1(isChar(',').next(WHITESPACES.skipMany())).label("multiple fields");
+    @Autowired
+    public FacetParser(FieldParser fieldParser) {
+        FACET_PARSER = fieldParser.getWithoutNot().sepBy1(isChar(',').next(WHITESPACES.skipMany())).label("multiple fields");
+    }
 
     @Trace
     public List<Field> parse(String string) {

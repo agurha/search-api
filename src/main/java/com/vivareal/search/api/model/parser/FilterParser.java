@@ -13,24 +13,23 @@ import static org.jparsec.Parsers.sequence;
 @Component
 public class FilterParser {
 
+    private final Parser<Filter> NORMAL_PARSER;
+    private final Parser<Filter> LIKE_PARSER;
+    private final Parser<Filter> RANGE_PARSER;
+    private final Parser<Filter> VIEWPORT_PARSER;
+    private final Parser<Filter> POLYGON_PARSER;
+    private final Parser<Filter> FILTER_PARSER;
+
     @Autowired
-    private FieldParser fieldParser;
-    @Autowired
-    private OperatorParser operatorParser;
-    @Autowired
-    private ValueParser valueParser;
+    public FilterParser(FieldParser fieldParser, OperatorParser operatorParser, ValueParser valueParser) {
+        NORMAL_PARSER = sequence(fieldParser.get(), operatorParser.exact(DIFFERENT, EQUAL, GREATER_EQUAL, GREATER, IN, LESS_EQUAL, LESS), valueParser.get(), Filter::new).label("filter");
+        LIKE_PARSER = sequence(fieldParser.get(), operatorParser.exact(LIKE), valueParser.getLikeValue(), Filter::new).label("LIKE filter");
+        RANGE_PARSER = sequence(fieldParser.get(), operatorParser.exact(RANGE), valueParser.getRangeValue(), Filter::new).label("RANGE filter");
+        VIEWPORT_PARSER = sequence(fieldParser.get(), operatorParser.exact(VIEWPORT), valueParser.getGeoPointValue(Type.VIEWPORT), Filter::new).label("VIEWPORT filter");
+        POLYGON_PARSER = sequence(fieldParser.get(), operatorParser.exact(POLYGON), valueParser.getGeoPointValue(Type.POLYGON), Filter::new).label("POLYGON filter");
+        FILTER_PARSER = or(RANGE_PARSER, VIEWPORT_PARSER, POLYGON_PARSER, LIKE_PARSER, NORMAL_PARSER);
+    }
 
-    private final Parser<Filter> NORMAL_PARSER = sequence(fieldParser.get(), operatorParser.exact(DIFFERENT, EQUAL, GREATER_EQUAL, GREATER, IN, LESS_EQUAL, LESS), valueParser.get(), Filter::new).label("filter");
-
-    private final Parser<Filter> LIKE_PARSER = sequence(fieldParser.get(), operatorParser.exact(LIKE), valueParser.getLikeValue(), Filter::new).label("LIKE filter");
-
-    private final Parser<Filter> RANGE_PARSER = sequence(fieldParser.get(), operatorParser.exact(RANGE), valueParser.getRangeValue(), Filter::new).label("RANGE filter");
-
-    private final Parser<Filter> VIEWPORT_PARSER = sequence(fieldParser.get(), operatorParser.exact(VIEWPORT), valueParser.getGeoPointValue(Type.VIEWPORT), Filter::new).label("VIEWPORT filter");
-
-    private final Parser<Filter> POLYGON_PARSER = sequence(fieldParser.get(), operatorParser.exact(POLYGON), valueParser.getGeoPointValue(Type.POLYGON), Filter::new).label("POLYGON filter");
-
-    private final Parser<Filter> FILTER_PARSER = or(RANGE_PARSER, VIEWPORT_PARSER, POLYGON_PARSER, LIKE_PARSER, NORMAL_PARSER);
 
     Parser<Filter> get() {
         return FILTER_PARSER;

@@ -7,17 +7,15 @@ import com.vivareal.search.api.model.search.Indexable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
+import org.springframework.web.context.annotation.RequestScope;
 
 import java.util.Map;
 
 import static java.util.Objects.isNull;
-import static org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS;
-import static org.springframework.web.context.WebApplicationContext.SCOPE_REQUEST;
 
-@Service
-@Scope(value = SCOPE_REQUEST, proxyMode = TARGET_CLASS)
+@RequestScope
+@Component
 public class IndexValidator {
 
     private static final Logger LOG = LoggerFactory.getLogger(IndexValidator.class);
