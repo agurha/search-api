@@ -17,6 +17,7 @@ repositories {
 }
 
 dependencies {
+    gatling 'org.scala-lang:scala-library:2.12.3'
     gatling 'org.scalaj:scalaj-http_2.12:2.3.0'
     gatling 'org.json4s:json4s-native_2.12:3.5.3'
     gatling 'com.amazonaws:aws-java-sdk-s3:1.11.185'

@@ -1,56 +1,41 @@
 package com.vivareal.search.simulation
 
-import com.typesafe.config.ConfigFactory
-import com.vivareal.search.config.{SearchAPIv2Feeder}
-import com.vivareal.search.repository.SearchAPIv2Repository
-import com.vivareal.search.repository.SearchAPIv2Repository.ScenarioName._
+import com.typesafe.config.ConfigFactory.load
+import com.vivareal.search.config.SearchAPIv2Feeder.feeder
 import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 
+import scala.collection.JavaConversions._
 import scala.concurrent.duration._
 
 class SearchAPIv2Simulation extends Simulation {
 
-  val config = ConfigFactory.load()
+  val globalConfig = load()
 
-  val gatling = config.getConfig("gatling")
+  val runScenarios = globalConfig.getString("gatling.scenarios")
+  val runScenariosSpl = runScenarios.split(",").toList
 
-  val httpConf = http.baseURL(s"http://${config.getString("api.http.base")}")
+  val httpConf = http.baseURL(s"http://${globalConfig.getString("api.http.base")}")
 
-  val api = config.getConfig("api")
+  val path = globalConfig.getString("api.http.path")
 
-  val index = config.getString("api.http.listings")
+  val index = globalConfig.getString("api.index")
 
-  val scenarios = gatling.getString("scenarios").split(",")
-    .toList
-      .map {
-        case FILTERS => scenario(FILTERS)
-          .repeat(gatling.getInt("repeat")) {
-            feed(SearchAPIv2Feeder.filters(SearchAPIv2Repository.getFacets).random)
-              .exec(http("Filter ${name}").get(index + "?filter=${name}:\"${value}\""))
-          }
+  val scenariosConf = load("scenarios.conf")
 
-        case FACETS => scenario(FACETS)
-          .repeat(gatling.getInt("repeat")) {
-            feed(SearchAPIv2Feeder.filters(SearchAPIv2Repository.getFacets).random)
-              .exec(http("Facet ${name}").get(index + "?filter=${name}:\"${value}\"&facets=${name}"))
-          }
-
-        case IDS => scenario(IDS)
-          .repeat(gatling.getInt("repeat")) {
-            feed(SearchAPIv2Feeder.ids(SearchAPIv2Repository.getIds()))
-              .exec(http("By ID").get(index + "/${value}"))
-          }
-
-        case IDS_IN => scenario(IDS_IN)
-          .repeat(gatling.getInt("repeat")) {
-            feed(SearchAPIv2Feeder.idsIN(SearchAPIv2Repository.getIds(IDS_IN, Some(gatling.getInt("idsIn.range") * gatling.getInt("idsIn.users")))))
-              .exec(http("By ID's IN").get(index + "?filter=id IN [${value}]"))
-          }
-      }
-    .map(scn => scn.inject(rampUsers(gatling.getInt(s"${scn.name}.users")) over (gatling.getInt("rampUp") seconds)))
+  var scenarios = scenariosConf.getObjectList("scenarios")
+    .map(configValue => configValue.toConfig)
+    .filter(config => "_all".equals(runScenarios) || runScenariosSpl.contains(config.getString("scenario.id")))
+    .map(config => {
+      scenario(config.getString("scenario.decription"))
+        .repeat(config.getInt("scenario.repeat")) {
+          feed(feeder(config).random)
+            .exec(http(config.getString("scenario.title")).get(path + index + config.getString("scenario.query")))
+        }.inject(rampUsers(config.getInt("scenario.users")) over (globalConfig.getInt("gatling.rampUp") seconds))
+    }).toList
 
   setUp(scenarios)
     .protocols(httpConf)
-    .maxDuration(gatling.getInt("maxDuration") seconds)
+    .maxDuration(globalConfig.getInt("gatling.maxDuration") seconds)
+
 }
